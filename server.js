@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -11,22 +10,36 @@ const io = new Server(server, {
   pingTimeout: 5000,
 });
 
-let muazzin = null;
+// Simple HTTP root route to confirm server is running
+app.get('/', (req, res) => {
+  res.send('Socket.IO Audio Broadcast Server is running.');
+});
 
 io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  socket.on("join-muazzin", () => {
-    muazzin = socket;
-    console.log("Muazzin joined:", socket.id);
+  socket.on("join-muazzin", (mosqueId) => {
+    socket.join(mosqueId);
+    socket.data.isMuazzin = true;
+    socket.data.mosqueId = mosqueId;
+    console.log(`Muazzin joined mosque ${mosqueId}:`, socket.id);
+  });
+
+  socket.on("join-listener", (mosqueId) => {
+    socket.join(mosqueId);
+    socket.data.isMuazzin = false;
+    socket.data.mosqueId = mosqueId;
+    console.log(`Listener joined mosque ${mosqueId}:`, socket.id);
   });
 
   socket.on("audio-chunk", (data) => {
-    socket.broadcast.emit("audio-chunk", data);
+    if (socket.data.isMuazzin && socket.data.mosqueId) {
+      // Broadcast audio chunks to all listeners in the same mosque room except sender
+      socket.to(socket.data.mosqueId).emit("audio-chunk", data);
+    }
   });
 
   socket.on("disconnect", () => {
-    if (socket === muazzin) muazzin = null;
     console.log("Client disconnected:", socket.id);
   });
 });
