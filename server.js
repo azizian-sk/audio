@@ -1,22 +1,37 @@
 // server.js
-const WebSocket = require('ws');
+const express = require('express');
 const http = require('http');
-const server = http.createServer();
-const wss = new WebSocket.Server({ server });
+const { Server } = require('socket.io');
 
-wss.on('connection', function connection(ws) {
-  console.log('Client connected');
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" },
+  pingInterval: 10000,
+  pingTimeout: 5000,
+});
 
-  ws.on('message', function incoming(data) {
-    // broadcast to all clients
-    wss.clients.forEach(function each(client) {
-      if (client !== ws && client.readyState === WebSocket.OPEN) {
-        client.send(data); // 🔁 send audio to all listeners
-      }
-    });
+let muazzin = null;
+
+io.on("connection", (socket) => {
+  console.log("Client connected:", socket.id);
+
+  socket.on("join-muazzin", () => {
+    muazzin = socket;
+    console.log("Muazzin joined:", socket.id);
+  });
+
+  socket.on("audio-chunk", (data) => {
+    socket.broadcast.emit("audio-chunk", data);
+  });
+
+  socket.on("disconnect", () => {
+    if (socket === muazzin) muazzin = null;
+    console.log("Client disconnected:", socket.id);
   });
 });
 
-server.listen(process.env.PORT || 443, () => {
-  console.log(`Server running on port ${process.env.PORT || 443}`);
+const PORT = process.env.PORT || 8000;
+server.listen(PORT, () => {
+  console.log("Server listening on port", PORT);
 });
